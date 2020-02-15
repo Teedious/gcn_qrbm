@@ -1,0 +1,3 @@
+*.lnk
+.vscode
+*Pipfile.lock
