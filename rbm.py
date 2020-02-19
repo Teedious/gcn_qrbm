@@ -114,6 +114,32 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         self.n_iter = n_iter
         self.verbose = verbose
         self.random_state = random_state
+        self.op_mode_classic = 0
+        self.op_mode_quantum = 1
+        self.op_mode = self.op_mode_classic
+
+    def set_op_mode(self,mode):
+        """Set the operation mode of the RBM.
+
+        depending on the operation mode the RBM will sample the negative 
+        phase of gradient descent using PCD (persistent contrative 
+        divergence) or a QA (quantum annealer)
+
+        Parameters
+        ----------
+        mode : {int} of value 0=op_mode_classic or 1=op_mode_quantum
+
+        Returns
+        -------
+        None
+        """
+        if mode == self.op_mode_classic:
+            self.op_mode = self.op_mode_classic
+        elif mode == self.op_mode_quantum:
+            self.op_mode = self.op_mode_quantum
+        else:
+            raise ValueError('modes can only be 0(=classic)=op_mode_classic and 1(=quantum)=op_mode_quantum.')
+
 
     def transform(self, X):
         """Compute the hidden layer activation probabilities, P(h=1|v=X).
@@ -262,6 +288,23 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
 
         self._fit(X, self.random_state_)
 
+    def _quantum_sample(self):
+        """Sample the negative phase i.e the model distribution of the RBM via a QA
+
+        Parameters:
+        -----------
+        None
+
+        Returns:
+        --------
+        v_neg : ndarray of shape (n_samples, n_features)
+            SAMPLES of the visible layer from the model distribution.
+
+        h_neg : ndarray of shape (n_samples, n_components)
+            MEAN FIELD VALUES of the hidden layer from the model distribution.
+        """
+        raise NotImplementedError
+
     def _fit(self, v_pos, rng):
         """Inner fit for one mini-batch.
 
@@ -277,8 +320,13 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
             Random number generator to use for sampling.
         """
         h_pos = self._mean_hiddens(v_pos)
-        v_neg = self._sample_visibles(self.h_samples_, rng)
-        h_neg = self._mean_hiddens(v_neg)
+
+        v_neg,h_neg=None,None
+        if(self.op_mode != self.op_mode_quantum):
+            v_neg = self._sample_visibles(self.h_samples_, rng)
+            h_neg = self._mean_hiddens(v_neg)
+        else:
+            v_neg,h_neg=self.quantum_sample()
 
         lr = float(self.learning_rate) / v_pos.shape[0]
         update = safe_sparse_dot(v_pos.T, h_pos, dense_output=True).T
