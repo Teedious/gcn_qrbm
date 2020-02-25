@@ -21,6 +21,7 @@ from sklearn.utils import gen_even_slices
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.extmath import log_logistic
 from sklearn.utils.validation import check_is_fitted
+from d_wave_client import *
 
 
 class BernoulliRBM(TransformerMixin, BaseEstimator):
@@ -116,6 +117,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         self.random_state = random_state
         self.op_mode_classic = 0
         self.op_mode_quantum = 1
+        self.op_mode_simulate_quantum = 2
         self.op_mode = self.op_mode_classic
 
     def set_op_mode(self,mode):
@@ -137,6 +139,8 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
             self.op_mode = self.op_mode_classic
         elif mode == self.op_mode_quantum:
             self.op_mode = self.op_mode_quantum
+        elif mode == self.op_mode_simulate_quantum:
+            self.op_mode = self.op_mode_simulate_quantum
         else:
             raise ValueError('modes can only be 0(=classic)=op_mode_classic and 1(=quantum)=op_mode_quantum.')
 
@@ -272,7 +276,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         if not hasattr(self, 'random_state_'):
             self.random_state_ = check_random_state(self.random_state)
         if not hasattr(self, 'components_'):
-            self.components_ = np.asarray(
+            self. components_ = np.asarray(
                 self.random_state_.normal(
                     0,
                     0.01,
@@ -288,7 +292,32 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
 
         self._fit(X, self.random_state_)
 
-    def _quantum_sample(self):
+    def batch_response(self,batchsize, response):
+        i =0
+        ret = []
+        for datum in response:
+            if i == batchsize:
+                yield ret
+                i = 0
+                ret = []
+                
+            ret.append(datum)
+
+            i +=1
+
+    def split_visible_hidden(self, batch):
+        num_visible = self.intercept_visible_.shape[0]
+
+        raise NotImplementedError
+
+    def most_probable(self,visible_batch):
+        raise NotImplementedError
+
+    def mean_batch_values(self,hidden_batch):
+        raise NotImplementedError
+
+
+    def _quantum_sample(self, n_samples):
         """Sample the negative phase i.e the model distribution of the RBM via a QA
 
         Parameters:
@@ -303,7 +332,34 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         h_neg : ndarray of shape (n_samples, n_components)
             MEAN FIELD VALUES of the hidden layer from the model distribution.
         """
-        raise NotImplementedError
+        v_neg = []
+        h_neg = []
+        if not hasattr(self, dclient):
+            self.dclient = DClient()
+        if self.op_mode == self.op_mode_simulate_quantum:
+            self.dclient.mode = 'simulate'
+            
+        elif self.op_mode == self.op_mode_quantum:
+            self.dclient.mode = 'quantum'
+            
+        else:
+            raise ValueError()
+        
+        _Q = upper_diagonal_blockmatrix(self.intercept_visible_, self.intercept_hidden_, self.components_.T)
+        Q = matrix_to_dict(_Q)
+
+        reads_per_sample = 10
+
+        response = self.dclient.sample(Q, num_reads= reads_per_sample* n_samples)
+
+
+        for batch in batch_response(reads_per_sample,response):
+            visible_batch, hidden_batch = split_visible_hidden(batch)
+            v_neg.append(most_probable(visible_batch))
+            h_neg.append(mean_batch_values(hidden_batch))
+
+        return v_neg, h_neg
+
 
     def _fit(self, v_pos, rng):
         """Inner fit for one mini-batch.
@@ -322,7 +378,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         h_pos = self._mean_hiddens(v_pos)
 
         v_neg,h_neg=None,None
-        if(self.op_mode != self.op_mode_quantum):
+        if(self.op_mode < self.op_mode_quantum):
             v_neg = self._sample_visibles(self.h_samples_, rng)
             h_neg = self._mean_hiddens(v_neg)
         else:
