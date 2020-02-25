@@ -1,0 +1,3 @@
+[submodule "gcn"]
+	path = gcn
+	url = https://github.com/tkipf/gcn.git
