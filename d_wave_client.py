@@ -12,19 +12,27 @@ class DClient:
     def __init__(self, mode='simulate'):
         self.mode = mode
         self.client = Client.from_config()
-
+        self.embedding = None
+        self.sampler = None
         self.base_sampler = DWaveSampler(solver={'qpu':True})
 
-    def sample(self,Q, num_reads=1):
-        embedding = minorminer.find_embedding(Q, self.base_sampler.edgelist)
-        sampler = None
-        if self.mode == 'quantum':
-            sampler = StructureComposite(self.base_sampler, self.base_sampler.nodelist, self.base_sampler.edgelist)
-        else:
-            sampler = StructureComposite(SimulatedAnnealingSampler(), self.base_sampler.nodelist, self.base_sampler.edgelist)
+    def find_embedding(self,Q):
+        if None == self.embedding:
+            self.embedding = minorminer.find_embedding(Q, self.base_sampler.edgelist)
+    
+    def create_sampler(self):
+        if None == self.sampler:
+            _sampler = None
+            if self.mode == 'quantum':
+                _sampler = StructureComposite(self.base_sampler, self.base_sampler.nodelist, self.base_sampler.edgelist)
+            else:
+                _sampler = StructureComposite(SimulatedAnnealingSampler(), self.base_sampler.nodelist, self.base_sampler.edgelist)
+            self.sampler = FixedEmbeddingComposite(_sampler, self.embedding)
 
-        new_sampler = FixedEmbeddingComposite(sampler, embedding)   
-        answer = new_sampler.sample_qubo(Q, num_reads=num_reads)
+    def sample(self,Q, num_reads=1):
+        self.find_embedding(Q)
+        self.create_sampler()
+        answer = self.sampler.sample_qubo(Q, num_reads=num_reads)
 
         return answer
 
@@ -67,7 +75,7 @@ def upper_diagonal_blockmatrix(visible_vector, hidden_vector, weight_matrix, sca
     _0C = np.concatenate((np.zeros_like(weight_matrix).T, C),axis=1)
 
     Q = np.concatenate((_BW, _0C),axis=0)
-    return Q / scale_factor
+    return -1 * Q / scale_factor
 
 def matrix_to_dict(matrix):
     matrix_dict = {}
