@@ -103,12 +103,15 @@ class Trainer:
         for epoch in range(FLAGS.epochs):
 
             t = time.time()
+            
             # Construct feed dictionary
-            feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
-            feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+            self.feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+            self.feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+
 
             # Training step
-            outs = self.sess.run([self.model.opt_op, self.model.loss, self.model.accuracy], feed_dict=feed_dict)
+            outs = self.sess.run([self.model.opt_op, self.model.loss, self.model.accuracy], feed_dict=self.feed_dict)
+
 
             # Validation
             cost, acc, duration = self.evaluate(features, support, y_val, val_mask, placeholders)
@@ -129,3 +132,6 @@ class Trainer:
         test_cost, test_acc, test_duration = self.evaluate(features, support, y_test, test_mask, placeholders)
         print("Test set results:", "cost=", "{:.5f}".format(test_cost),
             "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
+
+    def get_predictions(self):
+        return self.sess.run(self.model.predict(),feed_dict = self.feed_dict)
