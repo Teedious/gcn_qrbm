@@ -25,16 +25,18 @@ class DClient:
             _sampler = None
             if self.mode == 'quantum':
                 _sampler = StructureComposite(self.base_sampler, self.base_sampler.nodelist, self.base_sampler.edgelist)
+                _sampler.properties['default_annealing_time'] = 1
             else:
                 _sampler = StructureComposite(SimulatedAnnealingSampler(), self.base_sampler.nodelist, self.base_sampler.edgelist)
             self.sampler = FixedEmbeddingComposite(_sampler, self.embedding)
 
-    def sample(self,Q, num_reads=1):
+    def sample(self,Q, num_reads=10):
         self.find_embedding(Q)
         self.create_sampler()
         answer = self.sampler.sample_qubo(Q, num_reads=num_reads)
 
         return answer
+    
 
 
 def upper_diagonal_blockmatrix(visible_vector, hidden_vector, weight_matrix, scale_factor=1.):

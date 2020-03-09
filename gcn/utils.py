@@ -53,6 +53,12 @@ def load_data(dataset_str):
                 objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, graph = tuple(objects)
+    # np.savetxt("./citeseer_x.txt",x.toarray(),fmt="%d")
+    # np.savetxt("./citeseer_y.txt",y,fmt="%d")
+    # np.savetxt("./citeseer_tx.txt",tx.toarray(),fmt="%d")
+    # np.savetxt("./citeseer_allx.txt",allx.toarray(),fmt="%d")
+    # np.savetxt("./citeseer_ty.txt",ty,fmt="%d")
+    # np.savetxt("./citeseer_graph.txt",nx.adjacency_matrix(nx.from_dict_of_lists(graph)).toarray(),fmt="%d")
     test_idx_reorder = parse_index_file("gcn/data/ind.{}.test.index".format(dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
 

@@ -107,18 +107,19 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         Approximations to the Likelihood Gradient. International Conference
         on Machine Learning (ICML) 2008
     """
+    op_mode_classic = 0
+    op_mode_quantum = 1
+    op_mode_simulate_quantum = 2
+
     def __init__(self, n_components=256, learning_rate=0.1, batch_size=10,
-                 n_iter=10, verbose=0, random_state=None):
+                 n_iter=10, verbose=0, random_state=None, op_mode = 0):
         self.n_components = n_components
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.n_iter = n_iter
         self.verbose = verbose
         self.random_state = random_state
-        self.op_mode_classic = 0
-        self.op_mode_quantum = 1
-        self.op_mode_simulate_quantum = 2
-        self.op_mode = self.op_mode_classic
+        self.op_mode = op_mode
 
     def set_op_mode(self,mode):
         """Set the operation mode of the RBM.
@@ -372,7 +373,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         _Q = upper_diagonal_blockmatrix(self.intercept_visible_, self.intercept_hidden_, self.components_.T)
         Q = matrix_to_dict(_Q)
 
-        reads_per_sample = 10
+        reads_per_sample = 100
 
         response = self.dclient.sample(Q, num_reads= reads_per_sample* n_samples)
 
