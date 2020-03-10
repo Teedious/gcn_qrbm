@@ -12,11 +12,21 @@ from collections import defaultdict
 
 from sklearn.preprocessing import OneHotEncoder
 
-dataset = 'citeseer'
-outfile_name = 'metrics/{}_metrics.txt'.format(dataset)
+dataset = 'random_20000_20000_200_0p1_5'
+outfile_name = 'metrics/{}_metrics_.txt'.format(dataset)
 quantum = False
-
-dataset_categories = {'citeseer':6,'cora':7,'pubmed':3,'random_100_1000_2000_0p1_5':5}
+save_file = True
+dataset_categories = {
+'citeseer':6,
+'cora':7,
+'pubmed':3,
+'random_100_1000_2000_0p1_5':5,
+'random_500_500_10_0p500_5':5,
+'random_100_500_100_0p900_10':10,
+'random_10000_500_100_0p1_5':5,
+'random_100000_1000_100_0p1_5':5,
+'random_20000_20000_200_0p1_5':5,
+}
 t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
 enc = OneHotEncoder()
 enc.fit(t)
@@ -43,7 +53,7 @@ def create_estimators(x_test):
     lr = 0.1
     iterations = 5
     num_hidden = 7
-    batch_size = 100000
+    batch_size = 100
 
     rbm1 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_classic)
     rbm2 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_simulate_quantum)
@@ -57,20 +67,27 @@ def create_estimators(x_test):
     estimators.append(["GCN",Const(x_test,enc)])
     estimators.append(["GCN_LOG",logistic4])
     estimators.append(["GCN_CRBM_LOG",pipe1])
-    estimators.append(["GCN_SQRBM_LOG",pipe2])
+    # estimators.append(["GCN_SQRBM_LOG",pipe2])
     if quantum:
         estimators.append(["GCN_QRBM_LOG",pipe3])
 
     return estimators
+
+
 
 def save_metrics(dataset,metrics_list):
     cat_string = 'Category'
     header = {cat_string}
     to_save = defaultdict(dict)
 
-
     for i in range(1,dataset_categories[dataset]+1):
         to_save[i][cat_string]=i
+
+    sum = 0
+    for category in metrics_list[0][1].keys():
+        if category in {'accuracy','macro avg','weighted avg'}:
+                continue
+        sum += metrics_list[0][1][category]['support']
 
     for m in metrics_list:
         for category in m[1].keys():
@@ -80,18 +97,11 @@ def save_metrics(dataset,metrics_list):
             for metr in m[1][category].keys():
                 col_name = "{}_{}".format(str(m[0]),str(metr))
                 header.add(col_name)
-                to_save[int(category)][col_name] = m[1][category][metr]
+                if metr == 'support':
+                    to_save[int(category)][col_name] = m[1][category][metr]/sum
+                else:
+                    to_save[int(category)][col_name] = m[1][category][metr]
 
-    # for i in range(dataset_categories[dataset]):
-    #     to_save['category'][i]=i
-
-    # for m in metrics_list:
-    #     for category in m[1].keys():
-    #         if category in {'accuracy','macro avg','weighted avg'}:
-    #             continue
-            
-    #         for metr in m[1][category].keys():
-    #             to_save["{}_{}".format(str(m[0]),str(metr))][category] = m[1][category][metr]
     with open(outfile_name, mode='w') as file:
         file.write(", ".join(str(x) for x in sorted(list(header))))
         for category in sorted(to_save.keys()):
@@ -101,6 +111,8 @@ def save_metrics(dataset,metrics_list):
 
             file.write("\n")
             file.write(",".join("{:9.4f}".format(x) for x in row))
+
+
 
 def compare_on_dataset(dataset,save_metrics_to_file):
     a = Trainer(dataset=dataset)
@@ -131,4 +143,4 @@ def compare_on_dataset(dataset,save_metrics_to_file):
     if save_metrics_to_file:
         save_metrics(dataset,metrics_list)
 
-compare_on_dataset(dataset,True)
+compare_on_dataset(dataset,save_metrics_to_file=save_file)

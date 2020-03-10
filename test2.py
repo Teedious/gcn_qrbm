@@ -1,97 +1,77 @@
-print(__doc__)
-
-# Authors: Yann N. Dauphin, Vlad Niculae, Gabriel Synnaeve
-# License: BSD
-
-import numpy as np
-
-from scipy.ndimage import convolve
 from sklearn import linear_model, datasets, metrics
 from sklearn.model_selection import train_test_split
-from sklearn.neural_network import BernoulliRBM
-from sklearn.pipeline import Pipeline
-from sklearn.base import clone
+from gcn.train import *
+from gcn.utils import *
+from sklearn.preprocessing import OneHotEncoder
+from collections import defaultdict
+
+dataset = 'random_20000_20000_200_0p1_5'
+outfile_name = 'metrics/{}_metrics_1.txt'.format(dataset)
+
+dataset_categories = {'citeseer':6,'cora':7,'pubmed':3,'random_100_1000_2000_0p1_5':5,'random_500_500_10_0p500_5':5,'random_100_500_100_0p900_10':10,'random_10000_500_100_0p1_5':5,
+'random_100000_1000_100_0p1_5':5,
+'random_20000_20000_200_0p1_5':5,
+}
+t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
+enc = OneHotEncoder()
+enc.fit(t)
 
 
-# #############################################################################
-# Setting up
 
-def nudge_dataset(X, Y):
-    """
-    This produces a dataset 5 times bigger than the original one,
-    by moving the 8x8 images in X around by 1px to left, right, down, up
-    """
-    direction_vectors = [
-        [[0, 1, 0],
-         [0, 0, 0],
-         [0, 0, 0]],
-
-        [[0, 0, 0],
-         [1, 0, 0],
-         [0, 0, 0]],
-
-        [[0, 0, 0],
-         [0, 0, 1],
-         [0, 0, 0]],
-
-        [[0, 0, 0],
-         [0, 0, 0],
-         [0, 1, 0]]]
-
-    def shift(x, w):
-        return convolve(x.reshape((8, 8)), mode='constant', weights=w).ravel()
-
-    X = np.concatenate([X] +
-                       [np.apply_along_axis(shift, 1, X, vector)
-                        for vector in direction_vectors])
-    Y = np.concatenate([Y for _ in range(5)], axis=0)
-    return X, Y
+def save_metrics(dataset,metrics_list):
+    cat_string = 'Category'
+    header = {cat_string}
+    to_save = defaultdict(dict)
 
 
-# Load Data
-X, y = datasets.load_digits(return_X_y=True)
-X = np.asarray(X, 'float32')
-X, Y = nudge_dataset(X, y)
-X = (X - np.min(X, 0)) / (np.max(X, 0) + 0.0001)  # 0-1 scaling
+    for i in range(1,dataset_categories[dataset]+1):
+        to_save[i][cat_string]=i
 
-X_train, X_test, Y_train, Y_test = train_test_split(
-    X, Y, test_size=0.2, random_state=0)
+    for m in metrics_list:
+        for category in m[1].keys():
+            if category in {'accuracy','macro avg','weighted avg'}:
+                continue
+            
+            for metr in m[1][category].keys():
+                col_name = "{}_{}".format(str(m[0]),str(metr))
+                header.add(col_name)
+                to_save[int(category)][col_name] = m[1][category][metr]
 
-# Models we will use
-logistic = linear_model.LogisticRegression(solver='newton-cg', tol=1)
-rbm = BernoulliRBM(random_state=0, verbose=True)
+    # for i in range(dataset_categories[dataset]):
+    #     to_save['category'][i]=i
 
-rbm_features_classifier = Pipeline(
-    steps=[('rbm', rbm), ('logistic', logistic)])
+    # for m in metrics_list:
+    #     for category in m[1].keys():
+    #         if category in {'accuracy','macro avg','weighted avg'}:
+    #             continue
+            
+    #         for metr in m[1][category].keys():
+    #             to_save["{}_{}".format(str(m[0]),str(metr))][category] = m[1][category][metr]
+    with open(outfile_name, mode='w') as file:
+        file.write(", ".join(str(x) for x in sorted(list(header))))
+        for category in sorted(to_save.keys()):
+            row = []
+            for col in sorted(list(header)):
+                row.append(to_save[category][col])
 
-# #############################################################################
-# Training
+            file.write("\n")
+            file.write(",".join("{:9.4f}".format(x) for x in row))
 
-# Hyper-parameters. These were set by cross-validation,
-# using a GridSearchCV. Here we are not performing cross-validation to
-# save time.
-rbm.learning_rate = 0.06
-rbm.n_iter = 50
-# More components tend to give better prediction performance, but larger
-# fitting time
-rbm.n_components = 100
-logistic.C = 6000
 
-# Training RBM-Logistic Pipeline
-rbm_features_classifier.fit(X_train, Y_train)
+adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(dataset)
 
-# Training the Logistic regression classifier directly on the pixel
-raw_pixel_classifier = clone(logistic)
-raw_pixel_classifier.C = 100.
-raw_pixel_classifier.fit(X_train, Y_train)
+x_train = features[train_mask]
+x_test = features[test_mask]
 
-# #############################################################################
-# Evaluation
+y_train = enc.inverse_transform(y_train[train_mask]).reshape((-1,))
+y_test = enc.inverse_transform(y_test[test_mask]).reshape((-1,))
 
-Y_pred = rbm_features_classifier.predict(X_test)
-print("Logistic regression using RBM features:\n%s\n" % (
-    metrics.classification_report(Y_test, Y_pred)))
+logistic = linear_model.LogisticRegression(solver='newton-cg')
 
-Y_pred = raw_pixel_classifier.predict(X_test)
-print("Logistic regression using raw pixel features:\n%s\n" % (
-    metrics.classification_report(Y_test, Y_pred)))
+logistic.fit(x_train,y_train)
+
+y_pred = logistic.predict(x_test)
+
+print(metrics.classification_report(y_test, y_pred))
+
+save_metrics(dataset,[["LOG",metrics.classification_report(y_test, y_pred,output_dict=True)]])

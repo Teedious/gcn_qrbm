@@ -25,7 +25,7 @@ def save(elems,test_index,dataset_str):
         with open("gcn/data/ind.{}.{}".format(dataset_str, names[i]), 'wb') as f:
             pkl.dump(elems[i],f)
 
-def data_gen(filename=None,num_x=100, num_tx=1000,num_features=2000, feature_probability = 0.1, num_classes=5):
+def data_gen(file=False,num_x=100, num_tx=1000,num_features=2000, feature_probability = 0.1, num_classes=5):
     num_allx = num_x+num_tx
 
     graph = nx.fast_gnp_random_graph(num_allx,min(0.1,1/num_allx))
@@ -49,9 +49,9 @@ def data_gen(filename=None,num_x=100, num_tx=1000,num_features=2000, feature_pro
     ty = one_hot(num_tx,num_classes)
     ally = y
 
-    if None != filename:
-        save([x,y,tx,ty,allx,ally,graph],test_index,filename)
+    if file:
+        save([x,y,tx,ty,allx,ally,graph],test_index,"random_{}_{}_{}_0p{}_{}".format(num_x,num_tx, num_features,int(feature_probability*10),num_classes))
 
 
-data_gen("random_100_1000_2000_0p1_5")
+data_gen(file=True,num_x=20000,num_tx=20000,num_features=200,feature_probability=.1,num_classes=5)
 # d = DataGen()
