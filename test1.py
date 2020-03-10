@@ -9,13 +9,15 @@ from sklearn import linear_model, datasets, metrics
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from collections import defaultdict
+from RBM.PCD import PCDRBM
 
 from sklearn.preprocessing import OneHotEncoder
 
-dataset = 'random_20000_20000_200_0p1_5'
+dataset = 'citeseer'
 outfile_name = 'metrics/{}_metrics_.txt'.format(dataset)
 quantum = False
-save_file = True
+save_file = False
+
 dataset_categories = {
 'citeseer':6,
 'cora':7,
@@ -49,19 +51,43 @@ def create_estimators(x_test):
     logistic2 = linear_model.LogisticRegression()
     logistic3 = linear_model.LogisticRegression()
     logistic4 = linear_model.LogisticRegression()
+    logistic5 = linear_model.LogisticRegression()
 
-    lr = 0.1
-    iterations = 5
-    num_hidden = 7
+    lr = 0.01
+    iterations = 1000
+    num_hidden = 100
+    # lr = 0.01
+    # iterations = 10
+    # num_hidden = 100
     batch_size = 100
 
     rbm1 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_classic)
     rbm2 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_simulate_quantum)
     rbm3 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_quantum)
+    rbm4 = PCDRBM(
+        visible = dataset_categories[dataset], 
+        hidden = num_hidden, 
+        particles = -1, 
+        iterations = iterations, 
+        epochs = 1, 
+        step=lr, 
+        weight_decay=lr/iterations,
+        )
+    rbm5 = PCDRBM(
+        visible = dataset_categories[dataset], 
+        hidden = num_hidden, 
+        particles = -1, 
+        iterations = iterations, 
+        epochs = 1, 
+        step=lr, 
+        weight_decay=lr/iterations,
+        )
 
     pipe1 = Pipeline(steps=[('rbm1', rbm1), ('logistic1', logistic1)])
     pipe2 = Pipeline(steps=[('rbm2', rbm2), ('logistic2', logistic2)])
     pipe3 = Pipeline(steps=[('rbm3', rbm3), ('logistic3', logistic3)])
+    pipe5 = Pipeline(steps=[('rbm5', rbm5), ('logistic5', logistic5)])
+
 
     estimators = []
     estimators.append(["GCN",Const(x_test,enc)])
@@ -70,6 +96,17 @@ def create_estimators(x_test):
     # estimators.append(["GCN_SQRBM_LOG",pipe2])
     if quantum:
         estimators.append(["GCN_QRBM_LOG",pipe3])
+
+    estimators.append(["GCN_PCDRBM",PCDRBM(
+        visible = dataset_categories[dataset], 
+        hidden = num_hidden, 
+        particles = -1, 
+        iterations = iterations, 
+        epochs = 1, 
+        step=lr, 
+        weight_decay=lr/iterations,
+        )])
+    estimators.append(["GCN_PCDRBM_LOG",pipe5])
 
     return estimators
 
@@ -137,6 +174,11 @@ def compare_on_dataset(dataset,save_metrics_to_file):
         estimator[1].fit(x_train,y_train)
         
         y_pred = estimator[1].predict(x_test)
+        if len(y_pred.shape)>1:
+            temp = np.zeros_like(y_pred)
+            temp[np.arange(len(y_pred)), y_pred.argmax(1)] = 1
+            y_pred = enc.inverse_transform(temp).reshape((-1,))
+
         print("{:12} metrics:\n{}\n".format(estimator[0],metrics.classification_report(y_test, y_pred)))
         metrics_list.append([estimator[0],metrics.classification_report(y_test, y_pred,output_dict=True)])
 

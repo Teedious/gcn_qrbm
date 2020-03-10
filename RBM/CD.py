@@ -46,34 +46,23 @@ from scipy.special import expit
 from . import Base
 
 
-class PCDRBM (Base.BaseRBM):
+class CDRBM (Base.BaseRBM):
     
-    def __init__(self, visible = 8, hidden = 3, particles = 10, beta=2.0, precision=64):
-        self.visible= visible
+    def __init__ (self, visible = 8, hidden = 3, beta = 1, precision=64):
+        self.visible = visible
         self.hidden = hidden
         self.beta = beta
-        self.particles = particles
         if precision == 64:
             self.np_type = np.float64
         elif precision == 32:
             self.np_type = np.float32
         else:
             raise ValueError("Unsupported precisions")
-        self.precision = precision
-        #
-        # Initialize weights with a random normal distribution
-        #
-        self.W = np.random.normal(loc=0.0, scale=0.01, size=(visible, hidden))
-        #
-        # set bias to zero
-        # 
-        self.b = np.zeros(dtype=float, shape=(1, visible))
-        self.c = np.zeros(dtype=float, shape=(1, hidden))
-        #
-        # Initialize the particles
-        #
-        self.N = np.random.randint(low=0, high=2, size=(particles,self.visible)).astype(int)
+        self.W = np.random.normal(loc = 0, scale = 0.01, size = (visible, hidden)).astype(self.np_type)
+        self.b = np.zeros(shape = (1,visible), dtype=self.np_type)
+        self.c = np.zeros(shape = (1,hidden), dtype=self.np_type)
         self.global_step = 0
+        self.precision = precision
         
     #
     # Train the model on a training data mini batch
@@ -81,7 +70,7 @@ class PCDRBM (Base.BaseRBM):
     # sample. The number of columns of V should
     # be equal to the number of visible units
     #
-    def train(self, V, iterations, epochs, step=0.001, weight_decay=0.0001):
+    def train(self,  V, epochs = 100, step = 0.01, weight_decay=0):
         # 
         # Check geometry
         #
@@ -89,53 +78,46 @@ class PCDRBM (Base.BaseRBM):
         if (V.shape[1] != self.visible):
             print("Shape of training data", V.shape)
             raise ValueError("Data does not match number of visible units")
-        initial_step_size = step
         #
         # Prepare logs
         #
         dw = []
         errors = []
-        
-        for i in range(iterations):
+        # 
+        # Now do the actual training. First we calculate the expectation 
+        # values of the hidden units given the visible units. The result
+        # will be a matrix of shape (batch_size, hidden)
+        # 
+        for _ in range(epochs):
             #
-            # Update step size - we do this linearly over time
+            # Run one Gibbs sampling step and obtain new values
+            # for visible units and previous expectation values
             #
-            step = initial_step_size * (1.0 - (1.0*self.global_step)/(1.0*iterations*epochs))
-            #
-            # First we compute the negative phase. We run the
-            # Gibbs sampler for one step, starting at the previous state
-            # of the particles self.N
-            #
-            self.N, _ = self.runGibbsStep(self.N, size=self.particles)
-            #
-            # and use this to calculate the negative phase
+            Vb, E = self.runGibbsStep(V, batch_size)
             # 
-            Eb = expit(self.beta*(np.matmul(self.N, self.W) + self.c), dtype=self.np_type)
-            neg = np.tensordot(self.N, Eb, axes=((0),(0))).astype(self.np_type)
+            # Calculate new expectation values
             #
-            # Now we compute the positive phase. We need the
-            # expectation values of the hidden units
+            Eb = expit(self.beta*(np.matmul(Vb, self.W) + self.c), dtype=self.np_type)
             #
-            E = expit(self.beta*(np.matmul(V, self.W) + self.c))
-            pos = np.tensordot(V, E, axes=((0),(0)))
+            # Calculate contributions of positive and negative phase
+            # and update weights and bias
             #
-            # Now update weights
-            #
-            dW = step*self.beta*(pos -neg) / float(batch_size) - step*weight_decay*self.W / float(batch_size)
+            pos = np.tensordot(V, E, axes=((0),(0))).astype(self.np_type)
+            neg = np.tensordot(Vb, Eb, axes=((0),(0))).astype(self.np_type)
+            dW = step*self.beta*(pos -neg) / float(batch_size)
             self.W += dW
-            self.b += step*self.beta*np.sum(V - self.N, 0) / float(batch_size) 
-            self.c += step*self.beta*np.sum(E - Eb, 0) / float(batch_size) 
+            self.b += step*self.beta*np.sum(V - Vb, 0) / float(batch_size)
+            self.c += step*self.beta*np.sum(E - Eb, 0) / float(batch_size)
+            #
+            # Update logs
+            #
             dw.append(np.linalg.norm(dW))
-            #
-            # Compute reconstruction error every few iterations
-            #
-            if 0 == (self.global_step % 50):
-                Vb = self.sampleFrom(initial = V, size=batch_size, iterations = 1)
-                recon_error = np.linalg.norm(V - Vb) 
-                errors.append(recon_error)
-                if 0 == (self.global_step % 500):
-                    print("Iteration ",self.global_step,"recon error is ", recon_error)
-            self.global_step +=1
-        return dw, errors
+            recon_error =np.linalg.norm(V - Vb) 
+            errors.append(recon_error)
+            if 0 == (self.global_step % 500):
+                print("Epoch ", self.global_step," - reconstruction error is now", recon_error)
+            self.global_step +=1 
+        return dw,errors
+    
     
 
