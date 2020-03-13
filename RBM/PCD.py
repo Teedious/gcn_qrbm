@@ -156,8 +156,7 @@ class PCDRBM (Base.BaseRBM):
         return V
 
     def transform(self,V):
-        _,E = self.runGibbsStep(V,size=V.shape[0])
-        return E
+        return self.recover(V,100)
 
     def fit(self, x_train,y_train):
         self.train(x_train,self.iterations,self.epochs,self.step,self.weight_decay)

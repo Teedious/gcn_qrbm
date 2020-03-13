@@ -10,13 +10,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from collections import defaultdict
 from RBM.PCD import PCDRBM
+import subprocess
+
 
 from sklearn.preprocessing import OneHotEncoder
 
-dataset = 'citeseer'
-outfile_name = 'metrics/{}_metrics_.txt'.format(dataset)
 quantum = False
 save_file = False
+enc = None
 
 dataset_categories = {
 'citeseer':6,
@@ -29,9 +30,8 @@ dataset_categories = {
 'random_100000_1000_100_0p1_5':5,
 'random_20000_20000_200_0p1_5':5,
 }
-t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
-enc = OneHotEncoder()
-enc.fit(t)
+
+
 
 class Const:
     def __init__(self,estimation,enc):
@@ -46,20 +46,20 @@ class Const:
         pass
     
 
-def create_estimators(x_test):
+def create_estimators(x_test,dataset):
     logistic1 = linear_model.LogisticRegression()
     logistic2 = linear_model.LogisticRegression()
     logistic3 = linear_model.LogisticRegression()
     logistic4 = linear_model.LogisticRegression()
     logistic5 = linear_model.LogisticRegression()
 
-    lr = 0.01
+    lr = 0.1
     iterations = 1000
-    num_hidden = 100
+    num_hidden = 123
     # lr = 0.01
     # iterations = 10
     # num_hidden = 100
-    batch_size = 100
+    batch_size = 45
 
     rbm1 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_classic)
     rbm2 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden, verbose=True, batch_size=batch_size, op_mode = BernoulliRBM.op_mode_simulate_quantum)
@@ -112,7 +112,7 @@ def create_estimators(x_test):
 
 
 
-def save_metrics(dataset,metrics_list):
+def save_metrics(dataset,metrics_list,metrics_result_file):
     cat_string = 'Category'
     header = {cat_string}
     to_save = defaultdict(dict)
@@ -139,7 +139,7 @@ def save_metrics(dataset,metrics_list):
                 else:
                     to_save[int(category)][col_name] = m[1][category][metr]
 
-    with open(outfile_name, mode='w') as file:
+    with open(metrics_result_file, mode='w') as file:
         file.write(", ".join(str(x) for x in sorted(list(header))))
         for category in sorted(to_save.keys()):
             row = []
@@ -151,7 +151,7 @@ def save_metrics(dataset,metrics_list):
 
 
 
-def compare_on_dataset(dataset,save_metrics_to_file):
+def compare_on_dataset(dataset,metrics_result_file):
     a = Trainer(dataset=dataset)
     a.train()
 
@@ -166,7 +166,7 @@ def compare_on_dataset(dataset,save_metrics_to_file):
     y_test = enc.inverse_transform(y_test[test_mask]).reshape((-1,))
     y_val = enc.inverse_transform(y_val[val_mask]).reshape((-1,))
 
-    estimators = create_estimators(x_test)
+    estimators = create_estimators(x_test,dataset)
 
     metrics_list = []
     for estimator in estimators:
@@ -182,7 +182,49 @@ def compare_on_dataset(dataset,save_metrics_to_file):
         print("{:12} metrics:\n{}\n".format(estimator[0],metrics.classification_report(y_test, y_pred)))
         metrics_list.append([estimator[0],metrics.classification_report(y_test, y_pred,output_dict=True)])
 
-    if save_metrics_to_file:
-        save_metrics(dataset,metrics_list)
+    if None is not metrics_result_file:
+        save_metrics(dataset,metrics_list,metrics_result_file)
 
-compare_on_dataset(dataset,save_metrics_to_file=save_file)
+
+def test(dataset):
+    global enc
+    t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
+    enc = OneHotEncoder()
+    enc.fit(t)
+
+    if save_file:
+        results_dir = os.path.abspath("./metrics/results")
+        if not os.path.isdir(results_dir):
+            os.makedirs(results_dir)
+        dir_idx = len(os.listdir(results_dir))+1
+        dir_name = "{}/result{}".format(results_dir,dir_idx)
+
+        csv_dir = "{}/csv".format(dir_name)
+        csv_file = "{}/{}_metric_results.txt".format(csv_dir,dataset)
+        pdf_dir = "{}/pdf".format(dir_name)
+        tex_dir = "{}/tex".format(dir_name)
+
+        r_script_file = os.path.abspath("./metrics/loher.r")
+
+        os.makedirs(csv_dir)
+        os.makedirs(pdf_dir)
+        os.makedirs(tex_dir)
+
+    if save_file:
+        compare_on_dataset(dataset,metrics_result_file=csv_file)
+        subprocess.call([
+            'RScript.exe', 
+            '--vanilla',
+            r_script_file,
+            csv_file,
+            dir_name,
+            dataset,
+            ])
+    else:
+        compare_on_dataset(dataset,metrics_result_file=None)
+
+def test_all():
+    for dataset in dataset_categories.keys():
+        test(dataset)
+
+test('cora')

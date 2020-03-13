@@ -178,8 +178,11 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
             Corresponding mean field values for the hidden layer.
         """
         p = safe_sparse_dot(v, self.components_.T)
+        zer = np.zeros_like(p)
         p += self.intercept_hidden_
-        return expit(p, out=p)
+        zer += self.intercept_hidden_
+        ret = expit(p, out=p)
+        return ret
 
     def _sample_hiddens(self, v, rng):
         """Sample from the distribution P(h|v).

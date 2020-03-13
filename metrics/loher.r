@@ -3,7 +3,9 @@ library(reshape2)
 library(tikzDevice)
 library(stringr)
 
-dat.random_20000_20000_200_0p1_5_metrics_  <- read.csv("./random_20000_20000_200_0p1_5_metrics_.txt", header=TRUE)
+args = commandArgs(trailingOnly=TRUE)
+
+dat.inner  <- read.csv(args[1], header=TRUE)
 
 do.plot <- function(dat, dataset) {
     dat.molten <- melt(dat, id.vars=c("Category"))
@@ -14,13 +16,13 @@ do.plot <- function(dat, dataset) {
     return(g)
 }
 
-g <- do.plot(dat.random_20000_20000_200_0p1_5_metrics_, "random_20000_20000_200_0p1_5_metrics_")
+g <- do.plot(dat.inner, args[2])
 print(g) ## Show interactively
                                         
 ## Save as TikZ drawing
-tikz("./tmp/random_20000_20000_200_0p1_5_metrics_.tex", width=10, height=12)
+tikz(paste(args[2],"/tex/",args[3],".tex"), width=10, height=12)
 print(g)
 dev.off()
 
 ## Save as PDF
-ggsave("./tmp/random_20000_20000_200_0p1_5_metrics_.pdf", g, width=10, height=10)
+ggsave(paste(args[2],"/pdf/",args[3],".pdf"), g, width=10, height=10)
