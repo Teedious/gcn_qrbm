@@ -2,7 +2,7 @@ library(ggplot2)
 library(reshape2)
 library(tikzDevice)
 library(stringr)
-
+print('creating diagrams...')
 args = commandArgs(trailingOnly=TRUE)
 
 dat.inner  <- read.csv(args[1], header=TRUE)
@@ -20,9 +20,11 @@ g <- do.plot(dat.inner, args[2])
 print(g) ## Show interactively
                                         
 ## Save as TikZ drawing
-tikz(paste(args[2],"/tex/",args[3],".tex"), width=10, height=12)
-print(g)
-dev.off()
+# tikz(paste(args[2],"\\tex\\",args[3],".tex",sep=""), width=10, height=12)
+# print(g)
+# dev.off()
 
 ## Save as PDF
-ggsave(paste(args[2],"/pdf/",args[3],".pdf"), g, width=10, height=10)
+ggsave(paste(args[2],"\\pdf\\",args[3],".pdf",sep=""), g,device="pdf", width=10, height=10)
+
+print('done')
