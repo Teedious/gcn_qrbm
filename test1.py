@@ -16,7 +16,7 @@ import subprocess
 from sklearn.preprocessing import OneHotEncoder
 
 quantum = False
-save_file = False
+save_file = True
 enc = None
 
 dataset_categories = {
@@ -54,7 +54,7 @@ def create_estimators(x_test,dataset):
     logistic5 = linear_model.LogisticRegression()
 
     lr = 0.1
-    iterations = 1000
+    iterations = 100
     num_hidden = 123
     # lr = 0.01
     # iterations = 10
@@ -186,11 +186,8 @@ def compare_on_dataset(dataset,metrics_result_file):
         save_metrics(dataset,metrics_list,metrics_result_file)
 
 
-def test(dataset):
+def test(dataset_list):
     global enc
-    t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
-    enc = OneHotEncoder()
-    enc.fit(t)
 
     if save_file:
         results_dir = os.path.abspath("./metrics/results")
@@ -200,7 +197,6 @@ def test(dataset):
         dir_name = "{}/result{}".format(results_dir,dir_idx)
 
         csv_dir = "{}/csv".format(dir_name)
-        csv_file = "{}/{}_metric_results.txt".format(csv_dir,dataset)
         pdf_dir = "{}/pdf".format(dir_name)
         tex_dir = "{}/tex".format(dir_name)
 
@@ -210,21 +206,41 @@ def test(dataset):
         os.makedirs(pdf_dir)
         os.makedirs(tex_dir)
 
-    if save_file:
-        compare_on_dataset(dataset,metrics_result_file=csv_file)
-        subprocess.call([
-            'RScript.exe', 
-            '--vanilla',
-            r_script_file,
-            csv_file,
-            dir_name,
-            dataset,
-            ])
-    else:
-        compare_on_dataset(dataset,metrics_result_file=None)
+    for dataset in dataset_list:
+        csv_file = "{}/{}_metric_results.txt".format(csv_dir,dataset)
+        t = np.array(range(1,dataset_categories[dataset]+1)).reshape((-1,1))
+        enc = OneHotEncoder()
+        enc.fit(t)
+        print("""
+
+
+
+
+
+
+
+
+################################################################################
+#              Testing {:20}                    #
+################################################################################
+""".format(dataset))
+
+        if save_file:
+            compare_on_dataset(dataset,metrics_result_file=csv_file)
+            subprocess.call([
+                'RScript.exe', 
+                '--vanilla',
+                r_script_file,
+                csv_file,
+                dir_name,
+                dataset,
+                ])
+        else:
+            compare_on_dataset(dataset,metrics_result_file=None)
+            print('skipping file creation')
 
 def test_all():
-    for dataset in dataset_categories.keys():
-        test(dataset)
+    test(dataset_categories.keys())
 
-test('cora')
+# test(['cora'])
+test_all()
