@@ -2,6 +2,7 @@
 .vscode
 *Pipfile.lock
 __pycache__
+metrics/results
 
 # Custom
 *.idea
