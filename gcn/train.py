@@ -47,6 +47,12 @@ class Trainer:
         # Settings
         flags = tf.app.flags
         FLAGS = flags.FLAGS
+
+        flags_dict = FLAGS._flags()
+        keys_list = [keys for keys in flags_dict]
+        for keys in keys_list:
+            FLAGS.__delattr__(keys)
+            
         flags.DEFINE_string('dataset', self.dataset, 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
         flags.DEFINE_string('model', self.network_model, 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
         flags.DEFINE_float('learning_rate', self.learning_rate, 'Initial learning rate.')
