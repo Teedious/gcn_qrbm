@@ -112,7 +112,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
     op_mode_simulate_quantum = 2
 
     def __init__(self, n_components=256, learning_rate=0.1, batch_size=10,
-                 n_iter=10, verbose=0, random_state=None, op_mode = 0):
+                 n_iter=10, verbose=0, random_state=None, op_mode=0):
         self.n_components = n_components
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -121,7 +121,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         self.random_state = random_state
         self.op_mode = op_mode
 
-    def set_op_mode(self,mode):
+    def set_op_mode(self, mode):
         """Set the operation mode of the RBM.
 
         depending on the operation mode the RBM will sample the negative 
@@ -143,8 +143,8 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         elif mode == self.op_mode_simulate_quantum:
             self.op_mode = self.op_mode_simulate_quantum
         else:
-            raise ValueError('modes can only be 0(=classic)=op_mode_classic and 1(=quantum)=op_mode_quantum.')
-
+            raise ValueError(
+                'modes can only be 0(=classic)=op_mode_classic and 1(=quantum)=op_mode_quantum.')
 
     def transform(self, X):
         """Compute the hidden layer activation probabilities, P(h=1|v=X).
@@ -296,13 +296,13 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
 
         self._fit(X, self.random_state_)
 
-    def batch_response(self,batchsize, response):
-        i =0
+    def batch_response(self, batchsize, response):
+        i = 0
         ret = []
         ret_arr = []
         for datum in response.data(['sample', 'num_occurrences']):
             ret.append(datum)
-            i +=1
+            i += 1
 
             if i == batchsize:
                 yield ret
@@ -318,32 +318,31 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         for datum in batch:
             visible = []
             hidden = []
-            for i,key in enumerate(sorted(datum.sample.keys())):
+            for i, key in enumerate(sorted(datum.sample.keys())):
                 if i < num_visible:
                     visible.append(datum.sample[key])
                 else:
                     hidden.append(datum.sample[key])
 
-            visible_batch.append( (tuple(visible),datum.num_occurrences) )
-            hidden_batch.append( (tuple(hidden),datum.num_occurrences))
+            visible_batch.append((tuple(visible), datum.num_occurrences))
+            hidden_batch.append((tuple(hidden), datum.num_occurrences))
 
-        return visible_batch,hidden_batch
+        return visible_batch, hidden_batch
 
-
-    def most_probable(self,visible_batch):
+    def most_probable(self, visible_batch):
         visible_batch_dict = {}
         for item in visible_batch:
-            visible_batch_dict[item[0]] = visible_batch_dict.get(item[0],0) + item[1]
+            visible_batch_dict[item[0]] = visible_batch_dict.get(
+                item[0], 0) + item[1]
         return max(visible_batch_dict, key=visible_batch_dict.get)
 
-    def mean_batch_values(self,hidden_batch):
+    def mean_batch_values(self, hidden_batch):
         total = 0
         sum_of_vectors = np.zeros(len(hidden_batch[0][0]),)
         for item in hidden_batch:
             total += item[1]
             sum_of_vectors += np.array(item[0])*item[1]
         return sum_of_vectors / total
-
 
     def _quantum_sample(self, n_samples):
         """Sample the negative phase i.e the model distribution of the RBM via a QA
@@ -366,28 +365,28 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
             self.dclient = DClient()
         if self.op_mode == self.op_mode_simulate_quantum:
             self.dclient.mode = 'simulate'
-            
+
         elif self.op_mode == self.op_mode_quantum:
             self.dclient.mode = 'quantum'
-            
+
         else:
             raise ValueError()
-        
-        _Q = upper_diagonal_blockmatrix(self.intercept_visible_, self.intercept_hidden_, self.components_.T)
+
+        _Q = upper_diagonal_blockmatrix(
+            self.intercept_visible_, self.intercept_hidden_, self.components_.T)
         Q = matrix_to_dict(_Q)
 
-        reads_per_sample = 100
+        reads_per_sample = int(10000 / n_samples)
 
-        response = self.dclient.sample(Q, num_reads= reads_per_sample* n_samples)
+        response = self.dclient.sample(
+            Q, num_reads=reads_per_sample * n_samples)
 
-
-        for batch in self.batch_response(reads_per_sample,response):
+        for batch in self.batch_response(reads_per_sample, response):
             visible_batch, hidden_batch = self.split_visible_hidden(batch)
             v_neg.append(self.mean_batch_values(visible_batch))
             h_neg.append(self.mean_batch_values(hidden_batch))
 
         return np.array(v_neg), np.array(h_neg)
-
 
     def _fit(self, v_pos, rng):
         """Inner fit for one mini-batch.
@@ -405,12 +404,12 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         """
         h_pos = self._mean_hiddens(v_pos)
 
-        v_neg,h_neg=None,None
+        v_neg, h_neg = None, None
         if(self.op_mode < self.op_mode_quantum):
             v_neg = self._sample_visibles(self.h_samples_, rng)
             h_neg = self._mean_hiddens(v_neg)
         else:
-            v_neg,h_neg=self._quantum_sample(v_pos.shape[0])
+            v_neg, h_neg = self._quantum_sample(v_pos.shape[0])
 
         lr = float(self.learning_rate) / v_pos.shape[0]
         update = safe_sparse_dot(v_pos.T, h_pos, dense_output=True).T
