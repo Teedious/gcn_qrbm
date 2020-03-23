@@ -4,6 +4,7 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+autopep8 = "*"
 
 [packages]
 dwave-ocean-sdk = "*"
@@ -13,7 +14,6 @@ scipy= "==1.1.0"
 setuptools= "==40.6.3"
 numpy= ">=1.15.4"
 tensorflow= "==1.15.2"
-
 
 [requires]
 python_version = "3.7"
