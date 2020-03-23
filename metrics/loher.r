@@ -8,15 +8,16 @@ args = commandArgs(trailingOnly=TRUE)
 dat.inner  <- read.csv(args[1], header=TRUE)
 
 do.plot <- function(dat, dataset) {
-    dat.molten <- melt(dat, id.vars=c("Category"))
-    g <- ggplot(dat.molten, aes(x=Category, y=value, fill=variable, colour=variable)) +
-        facet_wrap(~variable, scales="free_y", ncol=4) + geom_bar(stat="identity") +
+    #dat.molten <- melt(dat, id.vars=c("Category"))
+    dat.molten <- dat
+    g <- ggplot(dat.molten, aes(x=Category, y=value, fill=estimator)) +
+        facet_grid(metric~estimator) + geom_bar(stat="identity") +
         ggtitle(str_c("Dataset: ", dataset)) + xlab("Category") + ylab("Value [Percent]") +
         theme(legend.position="top")
     return(g)
 }
 
-g <- do.plot(dat.inner, args[2])
+g <- do.plot(dat.inner, args[3])
 print(g) ## Show interactively
                                         
 ## Save as TikZ drawing
