@@ -12,7 +12,7 @@ import time
 import numpy as np
 import scipy.sparse as sp
 from scipy.special import expit  # logistic function
-
+import matplotlib.pyplot as plt
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 from sklearn.utils import check_array
@@ -164,6 +164,33 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         X = check_array(X, accept_sparse='csr', dtype=np.float64)
         return self._mean_hiddens(X)
 
+    def predict(self, X):
+        """Compute the visible layer activation probabilities, P(v=1|v=X).
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The data to be transformed.
+
+        Returns
+        -------
+        v : ndarray of shape (n_samples, n_components)
+            Latent representations of the data.
+        """
+        check_is_fitted(self)
+
+        X = check_array(X, accept_sparse='csr', dtype=np.float64)
+        if not hasattr(self, "random_state_"):
+            self.random_state_ = check_random_state(self.random_state)
+
+        _h = self._sample_hiddens(X, self.random_state_).astype(int)
+
+        _v = self._mean_visibles(_h)
+
+        estimation = np.zeros_like(_v)
+        estimation[np.arange(len(_v)), _v.argmax(1)] = 1
+        return estimation
+
     def _mean_hiddens(self, v):
         """Computes the probabilities P(h=1|v).
 
@@ -203,8 +230,8 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         p = self._mean_hiddens(v)
         return (rng.random_sample(size=p.shape) < p)
 
-    def _sample_visibles(self, h, rng):
-        """Sample from the distribution P(v|h).
+    def _mean_visibles(self, h):
+        """Computes the probabilities P(v=1|h).
 
         Parameters
         ----------
@@ -217,11 +244,30 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         Returns
         -------
         v : ndarray of shape (n_samples, n_features)
-            Values of the visible layer.
+            Corresponding mean field values for the visible layer.
         """
         p = np.dot(h, self.components_)
         p += self.intercept_visible_
         expit(p, out=p)
+        return p
+
+    def _sample_visibles(self, h, rng):
+        """Sample from the distribution P(v|h).
+
+        Parameters
+        ----------
+        h : ndarray of shape (n_samples, n_features)
+            Values of the hidden layer to sample from.
+
+        rng : RandomState
+            Random number generator to use.
+
+        Returns
+        -------
+        v : ndarray of shape (n_samples, n_components)
+            Values of the visible layer.
+        """
+        p = self._mean_visibles(h)
         return (rng.random_sample(size=p.shape) < p)
 
     def _free_energy(self, v):
@@ -490,6 +536,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
                                             n_batches, n_samples))
         verbose = self.verbose
         begin = time.time()
+        # self.save_weights_img(0)
         for iteration in range(1, self.n_iter + 1):
             for batch_slice in batch_slices:
                 self._fit(X[batch_slice], rng)
@@ -502,4 +549,14 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
                          self.score_samples(X).mean(), end - begin))
                 begin = end
 
+            # self.save_weights_img(iteration)
         return self
+
+    def save_weights_img(self, i):
+        __Q = upper_diagonal_blockmatrix(
+            self.intercept_visible_, self.intercept_hidden_, self.components_.T)
+        heatmap = plt.imshow(__Q, cmap='hot', interpolation='nearest')
+        plt.colorbar(heatmap)
+        plt.savefig(
+            'metrics/plt/old_rbm_{}_{}.png'.format(self.op_mode, i))
+        plt.clf()

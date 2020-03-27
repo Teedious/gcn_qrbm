@@ -15,8 +15,8 @@ import subprocess
 
 from sklearn.preprocessing import OneHotEncoder
 
-save_file = True
-test_training_data = True
+save_file = False
+test_training_data = False
 enc = None
 
 dataset_categories = {
@@ -52,12 +52,14 @@ def create_estimators(x_test, dataset):
     logistic3 = linear_model.LogisticRegression()
     logistic4 = linear_model.LogisticRegression()
     logistic5 = linear_model.LogisticRegression()
+    logistic7 = linear_model.LogisticRegression()
 
     lr = 0.1
-    iterations = 10
-    classic_iterations = 100
+    iterations = 50
+    classic_iterations = 5000
     num_hidden = 10
     batch_size = 1000
+    weight_decay = 0
 
     rbm1 = BernoulliRBM(learning_rate=lr, n_iter=classic_iterations, n_components=num_hidden,
                         verbose=True, batch_size=batch_size, op_mode=BernoulliRBM.op_mode_classic)
@@ -66,24 +68,32 @@ def create_estimators(x_test, dataset):
     rbm3 = BernoulliRBM(learning_rate=lr, n_iter=iterations, n_components=num_hidden,
                         verbose=True, batch_size=batch_size, op_mode=BernoulliRBM.op_mode_quantum)
     rbm4 = PCDRBM(visible=dataset_categories[dataset], hidden=num_hidden, particles=-1,
-                  iterations=classic_iterations, epochs=1, step=lr, weight_decay=lr/iterations)
+                  iterations=classic_iterations, epochs=1, step=lr, weight_decay=weight_decay)
     rbm5 = PCDRBM(visible=dataset_categories[dataset], hidden=num_hidden, particles=-1,
-                  iterations=classic_iterations, epochs=1, step=lr, weight_decay=lr/iterations)
+                  iterations=classic_iterations, epochs=1, step=lr, weight_decay=weight_decay)
+    rbm6 = PCDRBM(visible=dataset_categories[dataset], hidden=num_hidden, particles=-1,
+                  iterations=iterations, epochs=1, step=lr, weight_decay=weight_decay, op_mode=PCDRBM.op_mode_simulate_quantum)
+    rbm7 = PCDRBM(visible=dataset_categories[dataset], hidden=num_hidden, particles=-1,
+                  iterations=iterations, epochs=1, step=lr, weight_decay=weight_decay, op_mode=PCDRBM.op_mode_simulate_quantum)
 
     pipe1 = Pipeline(steps=[('rbm1', rbm1), ('logistic1', logistic1)])
     pipe2 = Pipeline(steps=[('rbm2', rbm2), ('logistic2', logistic2)])
     pipe3 = Pipeline(steps=[('rbm3', rbm3), ('logistic3', logistic3)])
     pipe5 = Pipeline(steps=[('rbm5', rbm5), ('logistic5', logistic5)])
+    pipe7 = Pipeline(steps=[('rbm5', rbm7), ('logistic5', logistic7)])
 
     estimators = []
     estimators.append(["GCN", Const(enc)])
-    estimators.append(["GCN->LOG", logistic4])
-    estimators.append(["GCN->old_RBM->LOG", pipe1])
-    estimators.append(["GCN->old_sim_Q_RBM->LOG", pipe2])
-    # estimators.append(["GCN->old_Q_RBM->LOG", pipe3])
+    # estimators.append(["GCN->LOG", logistic4])
+    # estimators.append(["GCN->old_RBM->LOG", pipe1])
+    # estimators.append(["GCN->old_sim_Q_RBM->LOG", pipe2])
+    # # estimators.append(["GCN->old_Q_RBM->LOG", pipe3])
 
-    estimators.append(["GCN->new_RBM", rbm4])
+    # estimators.append(["GCN->old_RBM", rbm1])
+    # estimators.append(["GCN->new_RBM", rbm4])
     estimators.append(["GCN->new_RBM->LOG", pipe5])
+    # estimators.append(["GCN->new_sim_Q_RBM", rbm6])
+    # estimators.append(["GCN->new_sim_Q_RBM->LOG", pipe7])
 
     return estimators
 
@@ -178,6 +188,16 @@ def fit_and_test(estimators, x_train, y_train, x_test, y_test):
     return metrics_list
 
 
+def to_ones(x_train, x_test):
+    _x_train = np.zeros_like(x_train)
+    _x_train[np.arange(len(x_train)), x_train.argmax(1)] = 1
+
+    _x_test = np.zeros_like(x_test)
+    _x_test[np.arange(len(x_test)), x_test.argmax(1)] = 1
+
+    return _x_train, _x_test
+
+
 def compare_on_dataset(dataset, metrics_result_file, test_training_data):
     a = Trainer(dataset=dataset)
     a.train()
@@ -199,6 +219,8 @@ def compare_on_dataset(dataset, metrics_result_file, test_training_data):
     if test_training_data:
         x_test = x_train
         y_test = y_train
+
+    x_train, x_test = to_ones(x_train, x_test)
 
     metrics_list = fit_and_test(estimators, x_train, y_train, x_test, y_test)
 
@@ -228,8 +250,6 @@ def test(dataset_list, test_training_data_list):
 
     for test_training_data in test_training_data_list:
         for dataset in dataset_list:
-            csv_file = "{}/{}_train_{}_metric_results.txt".format(
-                csv_dir, dataset, test_training_data)
             t = np.array(
                 range(1, dataset_categories[dataset]+1)).reshape((-1, 1))
             enc = OneHotEncoder()
@@ -249,6 +269,8 @@ def test(dataset_list, test_training_data_list):
 """.format(dataset))
 
             if save_file:
+                csv_file = "{}/{}_train_{}_metric_results.txt".format(
+                    csv_dir, dataset, test_training_data)
                 compare_on_dataset(
                     dataset, metrics_result_file=csv_file, test_training_data=test_training_data)
                 subprocess.call([
@@ -270,5 +292,5 @@ def test_all():
     test(dataset_categories.keys(), [False, True])
 
 
-# test(['cora'], [True])
-test_all()
+test(['random_500_500_10_0p500_5'], [True])
+# test_all()

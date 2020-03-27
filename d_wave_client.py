@@ -87,6 +87,11 @@ def upper_diagonal_blockmatrix(visible_vector, hidden_vector, weight_matrix, sca
     ]
 
     """
+    if len(visible_vector.shape) > 1:
+        visible_vector = np.reshape(visible_vector, (-1,))
+
+    if len(hidden_vector.shape) > 1:
+        hidden_vector = np.reshape(hidden_vector, (-1,))
 
     B = np.diag(visible_vector)
     C = np.diag(hidden_vector)
