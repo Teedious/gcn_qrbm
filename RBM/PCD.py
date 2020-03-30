@@ -46,6 +46,8 @@ from scipy.special import expit
 from . import Base
 from d_wave_client import *
 import matplotlib.pyplot as plt
+from sklearn.utils.extmath import safe_sparse_dot
+from sklearn.utils.extmath import log_logistic
 
 
 class PCDRBM (Base.BaseRBM):
@@ -54,7 +56,8 @@ class PCDRBM (Base.BaseRBM):
     op_mode_quantum = 1
     op_mode_simulate_quantum = 2
 
-    def __init__(self, visible=8, hidden=3, particles=10, beta=2.0, precision=64, iterations=100, epochs=1, step=0.001, weight_decay=0.0001, op_mode=0):
+    def __init__(self, tester, visible=8, hidden=3, particles=10, beta=2.0, precision=64, iterations=100, epochs=1, step=0.001, weight_decay=0.0001, op_mode=0):
+        self.tester = tester
         self.visible = visible
         self.hidden = hidden
         self.beta = beta
@@ -139,7 +142,8 @@ class PCDRBM (Base.BaseRBM):
         #
         dw = []
         errors = []
-        # self.save_weights_img(self.global_step)
+        self.tester.save_weights_img(
+            self.b, self.c,  self.W, self.global_step)
         for i in range(iterations):
             #
             # Update step size - we do this linearly over time
@@ -185,27 +189,18 @@ class PCDRBM (Base.BaseRBM):
             #
             # Compute reconstruction error every few iterations
             #
-            if 0 == (self.global_step % 50):
+            if 0 == (self.global_step % 1):
                 Vb = self.sampleFrom(initial=V, size=batch_size, iterations=1)
                 recon_error = np.linalg.norm(V - Vb)
                 errors.append(recon_error)
-                # if 0 == (self.global_step % 500):
-                # print("Iteration ",self.global_step,"recon error is ", recon_error)
-                print("Iteration ", self.global_step,
-                      "recon error is ", recon_error)
+
+                print("Iteration {}, recon error is {:.2f}, pseudo-likelihood = {:.2f}".format(
+                    self.global_step, recon_error, self.score_samples(V)))
 
             self.global_step += 1
-            # self.skave_weights_img(self.global_step)
+            self.tester.save_weights_img(
+                self.b, self.c,  self.W, self.global_step)
         return dw, errors
-
-    def save_weights_img(self, i):
-        __Q = upper_diagonal_blockmatrix(
-            self.b, self.c, self.W)
-        heatmap = plt.imshow(__Q, cmap='hot', interpolation='nearest')
-        plt.colorbar(heatmap)
-        plt.savefig(
-            'metrics/plt/new_rbm_{}_{}.png'.format(self.op_mode, i))
-        plt.clf()
 
     def recover(self, V, iterations):
         batch_size = V.shape[0]
@@ -317,3 +312,50 @@ class PCDRBM (Base.BaseRBM):
             h_neg.append(self.mean_batch_values(hidden_batch))
 
         return np.array(v_neg), np.array(h_neg)
+
+    def score_samples(self, X):
+        """Compute the pseudo-likelihood of X.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            Values of the visible layer. Must be all-boolean (not checked).
+
+        Returns
+        -------
+        pseudo_likelihood : ndarray of shape (n_samples,)
+            Value of the pseudo-likelihood (proxy for likelihood).
+
+        Notes
+        -----
+        This method is not deterministic: it computes a quantity called the
+        free energy on X, then on a randomly corrupted version of X, and
+        returns the log of the logistic function of the difference.
+        """
+
+        # Randomly corrupt one feature in each sample in v.
+        ind = (np.arange(X.shape[0]),
+               np.random.randint(0, X.shape[1], X.shape[0]))
+        X_ = X.copy()
+        X_[ind] = 1 - X_[ind]
+
+        fe = self._free_energy(X)
+        fe_ = self._free_energy(X)
+        return (X.shape[1] * log_logistic(fe_ - fe)).mean()
+
+    def _free_energy(self, v):
+        """Computes the free energy F(v) = - log sum_h exp(-E(v,h)).
+
+        Parameters
+        ----------
+        v : ndarray of shape (n_samples, n_features)
+            Values of the visible layer.
+
+        Returns
+        -------
+        free_energy : ndarray of shape (n_samples,)
+            The value of the free energy.
+        """
+        return (- safe_sparse_dot(v, self.b.T)
+                - np.logaddexp(0, safe_sparse_dot(v, self.W)
+                               + self.c).sum(axis=1))

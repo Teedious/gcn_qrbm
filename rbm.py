@@ -111,8 +111,9 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
     op_mode_quantum = 1
     op_mode_simulate_quantum = 2
 
-    def __init__(self, n_components=256, learning_rate=0.1, batch_size=10,
-                 n_iter=10, verbose=0, random_state=None, op_mode=0):
+    def __init__(self, tester, n_components=256, learning_rate=0.1, batch_size=10,
+                 n_iter=10, verbose=0, random_state=None, op_mode=0, ):
+        self.tester = tester
         self.n_components = n_components
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -536,7 +537,8 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
                                             n_batches, n_samples))
         verbose = self.verbose
         begin = time.time()
-        # self.save_weights_img(0)
+        self.tester.save_weights_img(
+            self.intercept_visible_, self.intercept_hidden_, self.components_.T, 0)
         for iteration in range(1, self.n_iter + 1):
             for batch_slice in batch_slices:
                 self._fit(X[batch_slice], rng)
@@ -549,14 +551,6 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
                          self.score_samples(X).mean(), end - begin))
                 begin = end
 
-            # self.save_weights_img(iteration)
+            self.tester.save_weights_img(
+                self.intercept_visible_, self.intercept_hidden_, self.components_.T, iteration)
         return self
-
-    def save_weights_img(self, i):
-        __Q = upper_diagonal_blockmatrix(
-            self.intercept_visible_, self.intercept_hidden_, self.components_.T)
-        heatmap = plt.imshow(__Q, cmap='hot', interpolation='nearest')
-        plt.colorbar(heatmap)
-        plt.savefig(
-            'metrics/plt/old_rbm_{}_{}.png'.format(self.op_mode, i))
-        plt.clf()
