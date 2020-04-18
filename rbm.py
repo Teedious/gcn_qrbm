@@ -22,6 +22,9 @@ from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.extmath import log_logistic
 from sklearn.utils.validation import check_is_fitted
 from d_wave_client import *
+from random import shuffle
+from random import choices
+from collections import Counter
 
 
 class BernoulliRBM(TransformerMixin, BaseEstimator):
@@ -109,7 +112,8 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
     """
     op_mode_classic = 0
     op_mode_quantum = 1
-    op_mode_simulate_quantum = 2
+    op_mode_simulated_annealing = 2
+    op_mode_qbsolv = 3
 
     def __init__(self, tester, n_components=256, learning_rate=0.1, batch_size=10,
                  n_iter=10, verbose=0, random_state=None, op_mode=0, ):
@@ -121,31 +125,6 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         self.verbose = verbose
         self.random_state = random_state
         self.op_mode = op_mode
-
-    def set_op_mode(self, mode):
-        """Set the operation mode of the RBM.
-
-        depending on the operation mode the RBM will sample the negative 
-        phase of gradient descent using PCD (persistent contrative 
-        divergence) or a QA (quantum annealer)
-
-        Parameters
-        ----------
-        mode : {int} of value 0=op_mode_classic or 1=op_mode_quantum
-
-        Returns
-        -------
-        None
-        """
-        if mode == self.op_mode_classic:
-            self.op_mode = self.op_mode_classic
-        elif mode == self.op_mode_quantum:
-            self.op_mode = self.op_mode_quantum
-        elif mode == self.op_mode_simulate_quantum:
-            self.op_mode = self.op_mode_simulate_quantum
-        else:
-            raise ValueError(
-                'modes can only be 0(=classic)=op_mode_classic and 1(=quantum)=op_mode_quantum.')
 
     def transform(self, X):
         """Compute the hidden layer activation probabilities, P(h=1|v=X).
@@ -206,9 +185,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
             Corresponding mean field values for the hidden layer.
         """
         p = safe_sparse_dot(v, self.components_.T)
-        zer = np.zeros_like(p)
         p += self.intercept_hidden_
-        zer += self.intercept_hidden_
         ret = expit(p, out=p)
         return ret
 
@@ -343,18 +320,32 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
 
         self._fit(X, self.random_state_)
 
-    def batch_response(self, batchsize, response):
+    def batch_samples(self, batchsize, response, total_size):
         i = 0
         ret = []
-        ret_arr = []
-        for datum in response.data(['sample', 'num_occurrences']):
-            ret.append(datum)
-            i += 1
+        samples = []
+        i = i
+        for datum in response:
+            for i in range(datum.num_occurrences):
+                samples.append(datum.sample)
+        
+        shuffle(samples)
 
-            if i == batchsize:
-                yield ret
-                i = 0
-                ret = []
+        # Fix QBSolv problem
+        sample_len = len(samples)
+        while sample_len!=total_size:
+            if sample_len > total_size:
+                samples = samples[:total_size]
+            elif sample_len*2<total_size:
+                samples +=samples
+            else:
+                samples += choices(population=samples, k=total_size-sample_len)
+            sample_len = len(samples)
+        ###################
+
+        while len(samples) > 0:
+            yield samples[:batchsize]
+            del samples[:batchsize]
 
     def split_visible_hidden(self, batch):
         num_visible = self.intercept_visible_.shape[0]
@@ -362,34 +353,30 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         visible_batch = []
         hidden_batch = []
 
-        for datum in batch:
+        for sample in batch:
             visible = []
             hidden = []
-            for i, key in enumerate(sorted(datum.sample.keys())):
+            for i, key in enumerate(sorted(sample.keys())):
                 if i < num_visible:
-                    visible.append(datum.sample[key])
+                    visible.append(sample[key])
                 else:
-                    hidden.append(datum.sample[key])
+                    hidden.append(sample[key])
 
-            visible_batch.append((tuple(visible), datum.num_occurrences))
-            hidden_batch.append((tuple(hidden), datum.num_occurrences))
+            visible_batch.append(tuple(visible))
+            hidden_batch.append(tuple(hidden))
 
         return visible_batch, hidden_batch
 
     def most_probable(self, visible_batch):
-        visible_batch_dict = {}
-        for item in visible_batch:
-            visible_batch_dict[item[0]] = visible_batch_dict.get(
-                item[0], 0) + item[1]
-        return max(visible_batch_dict, key=visible_batch_dict.get)
+        count = Counter(visible_batch)
+        return count.most_common(1)[0][0]
 
     def mean_batch_values(self, hidden_batch):
         total = 0
-        sum_of_vectors = np.zeros(len(hidden_batch[0][0]),)
+        sum_of_vectors = np.zeros(len(hidden_batch[0]),)
         for item in hidden_batch:
-            total += item[1]
-            sum_of_vectors += np.array(item[0])*item[1]
-        return sum_of_vectors / total
+            sum_of_vectors += np.array(item)
+        return sum_of_vectors / len(hidden_batch)
 
     def _quantum_sample(self, n_samples):
         """Sample the negative phase i.e the model distribution of the RBM via a QA
@@ -409,28 +396,21 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
         v_neg = []
         h_neg = []
         if not hasattr(self, "dclient"):
-            self.dclient = DClient()
-        if self.op_mode == self.op_mode_simulate_quantum:
-            self.dclient.mode = 'simulate'
+            self.dclient = DClient(mode=self.op_mode)
 
-        elif self.op_mode == self.op_mode_quantum:
-            self.dclient.mode = 'quantum'
-
-        else:
-            raise ValueError()
 
         _Q = upper_diagonal_blockmatrix(
             self.intercept_visible_, self.intercept_hidden_, self.components_.T)
         Q = matrix_to_dict(_Q)
 
-        reads_per_sample = int(10000 / n_samples)
+        reads_per_sample = max(1,int(1000 / n_samples))
 
         response = self.dclient.sample(
             Q, num_reads=reads_per_sample * n_samples)
 
-        for batch in self.batch_response(reads_per_sample, response):
+        for batch in self.batch_samples(reads_per_sample, response, reads_per_sample * n_samples):
             visible_batch, hidden_batch = self.split_visible_hidden(batch)
-            v_neg.append(self.mean_batch_values(visible_batch))
+            v_neg.append(self.most_probable(visible_batch))
             h_neg.append(self.mean_batch_values(hidden_batch))
 
         return np.array(v_neg), np.array(h_neg)

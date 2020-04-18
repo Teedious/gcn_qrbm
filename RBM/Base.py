@@ -52,7 +52,7 @@ class BaseRBM:
         #
         # Sample hidden units from visible units
         #      
-        E = expit(self.beta*(np.matmul(V.astype(int), self.W) + self.c), dtype=self.np_type)
+        E = expit(self.beta*(np.matmul(V.astype(float), self.W) + self.c), dtype=self.np_type)
         U = np.random.random_sample(size=(size, self.hidden)).astype(self.np_type)
         H = (U <= E).astype(int)
         #
