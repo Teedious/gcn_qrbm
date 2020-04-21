@@ -279,7 +279,7 @@ class PCDRBM (Base.BaseRBM):
 
         _Q = upper_diagonal_blockmatrix(
             self.b, self.c, self.W)
-        Q = matrix_to_dict(_Q)
+        Q = matrix_to_dict(-_Q)
 
         reads_per_sample = max(1,int(1000 / n_samples))
 

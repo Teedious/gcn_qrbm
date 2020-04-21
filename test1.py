@@ -150,7 +150,7 @@ class Tester:
         # estimators.append(["GCN", Const(self.enc)])
         # estimators.append(["LogisticRegression", logistic1])
 
-        # # estimators.append(['GCN->o_rbm_cl',o_rbm_cl])
+        # estimators.append(['GCN->o_rbm_cl',o_rbm_cl])
         # # estimators.append(['GCN->o_rbm_sa',o_rbm_sa])
         # # estimators.append(['GCN->o_rbm_qu',o_rbm_qu])
         # # estimators.append(['GCN->o_rbm_qs',o_rbm_qs])
@@ -159,16 +159,16 @@ class Tester:
         # # estimators.append(['GCN->n_rbm_qu',n_rbm_qu])
         # # estimators.append(['GCN->n_rbm_qs',n_rbm_qs])
 
-        estimators.append(['classicalRBM',o_rbm_cl_pipe])
-        estimators.append(['GCN--nrbmcl--LOG',n_rbm_cl_pipe])
+        # estimators.append(['classicalRBM',o_rbm_cl_pipe])
+        # estimators.append(['GCN--nrbmcl--LOG',n_rbm_cl_pipe])
         # ########################-#######-####################
-        estimators.append(['quantumSimualtedRBMsa',o_rbm_sa_pipe])
-        estimators.append(['GCN--nrbmsa--LOG',n_rbm_sa_pipe])
+        # estimators.append(['quantumSimualtedRBMsa',o_rbm_sa_pipe])
+        # estimators.append(['GCN--nrbmsa--LOG',n_rbm_sa_pipe])
         # ########################-#######-####################
         # estimators.append(['quantumSimualtedRBMts',o_rbm_qs_pipe])
         # # estimators.append(['GCN--nrbmqs--LOG',n_rbm_qs_pipe])
 
-        # estimators.append(['quantumRBM',o_rbm_qu_pipe])
+        estimators.append(['quantumRBM',o_rbm_qu_pipe])
         # estimators.append(['GCN->n_rbm_qu->LOG',n_rbm_qu_pipe])
 
         return estimators
@@ -370,7 +370,7 @@ class Tester:
             results_dir = os.path.abspath("./metrics/results")
             if not os.path.isdir(results_dir):
                 os.makedirs(results_dir)
-            dir_name = "{}/final".format(results_dir)
+            dir_name = "{}/final-test123".format(results_dir)
 
             csv_dir = "{}/csv".format(dir_name)
             pdf_dir = "{}/pdf".format(dir_name)

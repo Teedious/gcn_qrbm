@@ -31,6 +31,7 @@ W = nx.to_numpy_array(G)
 a = set(range(2048))
 b = set(base_sampler.nodelist)
 c = np.array(sorted(a.intersection(b)))
+d = sorted(a-b)
 
 B_ = [a % 8 < 4 for a in c]
 B = c[B_]

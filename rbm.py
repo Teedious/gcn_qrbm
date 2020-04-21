@@ -401,7 +401,7 @@ class BernoulliRBM(TransformerMixin, BaseEstimator):
 
         _Q = upper_diagonal_blockmatrix(
             self.intercept_visible_, self.intercept_hidden_, self.components_.T)
-        Q = matrix_to_dict(_Q)
+        Q = matrix_to_dict(-_Q)
 
         reads_per_sample = max(1,int(1000 / n_samples))
 

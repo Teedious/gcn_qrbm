@@ -1,6 +1,6 @@
 from test1 import Tester
 
-t = Tester(save_file=False,pdf=False,  create_images=True,tikz=False,c_iterations=20, q_iterations=20)
+t = Tester(save_file=True,pdf=False,  create_images=True,tikz=False,c_iterations=50, q_iterations=20)
 t.dataset_categories = {
     'citeseer': 6,
     'cora': 7,
